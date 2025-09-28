@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Generate QR codes to transfer small files securely without uploading to any server.">
+    <title>ØR-Code Generator</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/framer-motion/dist/framer-motion.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+
+<body>
+
+    <button id="scrollBtn" onclick="scrollToTop()">
+        <i class="fas fa-arrow-up"></i>
+    </button>
+
+    <nav class="navbar">
+        <div class="navbar-logo">
+            <img src="logo-dark.png" alt="Logo" id="logo">
+        </div>
+
+    </nav>
+
+    <button class="theme-toggle" id="themeToggle">🌙</button>
+
+    <canvas class="canvas-bg" id="bgCanvas"></canvas>
+    <div class="container">
+        <header>
+            <h1>QR Code File Transfer</h1>
+            <div class="info-text">
+                <p>
+                    Use this tool to generate a QR code to transfer a small file (< 2kb). The file is encoded into the
+                        QR code itself and <b>is not uploaded to any server</b>.
+                        <br><br>The file's data never leaves your computer. (Though this site's server can technically
+                        see the
+                        file's name.
+                        <br><br>To generate one of these QR codes without needing to load this page from the internet,
+                        you can
+                        either:
+                        <ul>
+                            <li>save it to your computer (File -> Save As -> Webpage, Complete)</li>
+                        </ul>
+                </p>
+            </div>
+        </header>
+
+        <div class="card input-section">
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" accept="*">
+                <div class="upload-icon">📁</div>
+                <p>Drop your file here or click to browse</p>
+            </div>
+            <p id="fileNameDisplay" class="file-name-display"></p>
+            <button id="encodeButton" class="button">Generate QR Code</button>
+        </div>
+
+        <div class="card">
+            <div id="qrcode"></div>
+            <button id="downloadButton" class="button" style="display:none;">Download QR Code</button>
+        </div>
+
+    </div>
+    <script src="script.js"></script>
+    <script>
+        // Interactive Background
+        const canvas = document.getElementById('bgCanvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const themeToggle = document.getElementById('themeToggle');
+        const html = document.documentElement;
+
+        function toggleTheme() {
+            const currentTheme = html.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', newTheme);
+            themeToggle.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+            // Change the logo based on theme
+            const logo = document.getElementById('logo');
+            logo.src = newTheme === 'dark' ? 'logo-dark.png' : 'logo-light.png';
+            // Update QR code colors if it exists
+            const qrCode = document.getElementById('qrcode');
+            if (qrCode.firstChild) {
+                const file = document.getElementById('fileInput').files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => onFileLoaded(file.name, e.target.result);
+                    reader.readAsDataURL(file);
+                }
+            }
+        }
+
+        themeToggle.addEventListener('click', toggleTheme);
+        // Set canvas size
+        function resizeCanvas() {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Create particles
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 1000;
+        const positions = new Float32Array(particlesCount * 3);
+
+        for (let i = 0; i < particlesCount * 3; i++) {
+            positions[i] = (Math.random() - 0.5) * 10;
+        }
+
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.02,
+            color: 0x6366f1
+        });
+        const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particles);
+
+        camera.position.z = 5;
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            particles.rotation.x += 0.0005;
+            particles.rotation.y += 0.0005;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // File handling and QR generation
+        const WEB_URL_PREFIX = "https://amanraox.github.io/share-bits-wirelessly/dl.html";
+
+        document.getElementById('encodeButton').addEventListener('click', function () {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => onFileLoaded(file.name, e.target.result);
+                reader.readAsDataURL(file);
+            } else {
+                alert("Please select a file first.");
+            }
+        });
+
+        function onFileLoaded(filename, dataUrl) {
+            if (dataUrl.length + filename.length > 2000) {
+                    const dialog = document.getElementById("fileSizeDialog");
+                    document.getElementById("dialogText").innerText = `File ${filename} is too large for the QR code!`;
+                    dialog.showModal(); // Opens the dialog
+                }
+
+            const b64 = encodeURIComponent(dataUrl.split(',')[1]);
+            const url = `${WEB_URL_PREFIX}?f=${filename}#${b64}`;
+            document.getElementById('qrcode').innerHTML = '';
+
+            const isDarkTheme = html.getAttribute('data-theme') === 'dark';
+            new QRCode(document.getElementById('qrcode'), {
+                text: url,
+                width: 256,
+                height: 256,
+                colorDark: isDarkTheme ? "#ffffff" : "#000000",
+                colorLight: isDarkTheme ? "#000000" : "#ffffff",
+            });
+
+            const downloadButton = document.getElementById('downloadButton');
+            downloadButton.style.display = 'inline-block';
+
+            // Download functionality
+            downloadButton.addEventListener('click', function () {
+            const qrCanvas = document.querySelector('#qrcode canvas'); // Getting the canvas element
+            if (qrCanvas) {
+                const link = document.createElement('a');
+                link.href = qrCanvas.toDataURL();
+                link.download = `${filename}-qrcode.png`;
+                link.click();
+            } else {
+                alert("QR Code is not generated yet.");
+            }
+        });
+        }
+
+        // Drag and drop handling
+        const dropZone = document.querySelector('.file-input-wrapper');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.style.border = '2px dashed #a855f7';
+        }
+
+        function unhighlight(e) {
+            dropZone.style.border = '2px dashed var(--primary-color)';
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+
+
+        fileInput.addEventListener('change', updateFileNameDisplay);
+
+        function updateFileNameDisplay() {
+            const file = fileInput.files[0];
+            if (file) {
+                fileNameDisplay.textContent = `Uploaded: ${file.name}`;
+            } else {
+                fileNameDisplay.textContent = ''; // Clear if no file is selected
+            }
+        }
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            document.getElementById('fileInput').files = dt.files;
+            // adding
+            updateFileNameDisplay()
+        }
+    </script>
+    <script>
+        let scrollBtn = document.getElementById("scrollBtn");
+        window.onscroll = function() {
+            if (document.body.scrollTop > 100 || document.documentElement.scrollTop > 100) {
+                scrollBtn.style.display = "flex";
+            } else {
+                scrollBtn.style.display = "none";
+            }
+        };
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    </script>
+    <dialog id="fileSizeDialog">
+        <p id="dialogText"></p>
+        <button id="closeDialogBtn" onclick="document.getElementById('fileSizeDialog').close()">OK</button>
+    </dialog>
+    
+    
+</body>
+
+</html>
